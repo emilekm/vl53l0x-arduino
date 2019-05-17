@@ -4,7 +4,6 @@
 // VL53L0X datasheet.
 
 #include <VL53L0X.h>
-#include <Wire.h>
 
 // Defines /////////////////////////////////////////////////////////////////////
 
@@ -34,11 +33,11 @@
 
 // Constructors ////////////////////////////////////////////////////////////////
 
-VL53L0X::VL53L0X(void)
-  : address(ADDRESS_DEFAULT)
-  , io_timeout(0) // no timeout
+VL53L0X::VL53L0X(DS28E17 *ds28e17_)
+  : io_timeout(0) // no timeout
   , did_timeout(false)
 {
+  ds28e17 = ds28e17_;
 }
 
 // Public Methods //////////////////////////////////////////////////////////////
@@ -281,32 +280,32 @@ bool VL53L0X::init(bool io_2v8)
 // Write an 8-bit register
 void VL53L0X::writeReg(uint8_t reg, uint8_t value)
 {
-  Wire.beginTransmission(address);
-  Wire.write(reg);
-  Wire.write(value);
-  last_status = Wire.endTransmission();
+  uint8_t data[2];
+  data[0] = reg;
+  data[1] = value;
+  last_status = ds28e17.write(address, data, 2);
 }
 
 // Write a 16-bit register
 void VL53L0X::writeReg16Bit(uint8_t reg, uint16_t value)
 {
-  Wire.beginTransmission(address);
-  Wire.write(reg);
-  Wire.write((value >> 8) & 0xFF); // value high byte
-  Wire.write( value       & 0xFF); // value low byte
-  last_status = Wire.endTransmission();
+  uint8_t data[3];
+  data[0] = reg;
+  data[1] = (value >> 8) & 0xFF; // value high byte
+  data[2] = value & 0xFF; // value low byte
+  last_status = ds28e17.write(address, data, 3);
 }
 
 // Write a 32-bit register
-void VL53L0X::writeReg32Bit(uint8_t reg, uint32_t value)
+void VL153L0X::writeReg32Bit(uint8_t reg, uint32_t value)
 {
-  Wire.beginTransmission(address);
-  Wire.write(reg);
-  Wire.write((value >> 24) & 0xFF); // value highest byte
-  Wire.write((value >> 16) & 0xFF);
-  Wire.write((value >>  8) & 0xFF);
-  Wire.write( value        & 0xFF); // value lowest byte
-  last_status = Wire.endTransmission();
+  uint8_t data[5];
+  data[0] = reg;
+  data[1] = (value >> 24) & 0xFF; // value highest byte
+  data[2] = (value >> 16) & 0xFF;
+  data[3] = (value >> 8) & 0xFF;
+  data[4] = value & 0xFF; // value low byte
+  last_status = ds28e17.write(address, data, 5);
 }
 
 // Read an 8-bit register
@@ -314,12 +313,9 @@ uint8_t VL53L0X::readReg(uint8_t reg)
 {
   uint8_t value;
 
-  Wire.beginTransmission(address);
-  Wire.write(reg);
-  last_status = Wire.endTransmission();
+  ds28e17.write(address, reg, 1);
 
-  Wire.requestFrom(address, (uint8_t)1);
-  value = Wire.read();
+  last_status = ds28e17.read(address, value, 1);
 
   return value;
 }
@@ -327,15 +323,15 @@ uint8_t VL53L0X::readReg(uint8_t reg)
 // Read a 16-bit register
 uint16_t VL53L0X::readReg16Bit(uint8_t reg)
 {
+  uint8_t arr[2];
   uint16_t value;
 
-  Wire.beginTransmission(address);
-  Wire.write(reg);
-  last_status = Wire.endTransmission();
+  ds28e17.write(address, reg, 1);
 
-  Wire.requestFrom(address, (uint8_t)2);
-  value  = (uint16_t)Wire.read() << 8; // value high byte
-  value |=           Wire.read();      // value low byte
+  last_status = ds28e17.read(address, arr, 2)
+
+  value  = (uint16_t)arr[1] << 8; // value high byte
+  value |=           arr[0];      // value low byte
 
   return value;
 }
@@ -343,17 +339,16 @@ uint16_t VL53L0X::readReg16Bit(uint8_t reg)
 // Read a 32-bit register
 uint32_t VL53L0X::readReg32Bit(uint8_t reg)
 {
+  uint8_t arr[4];
   uint32_t value;
 
-  Wire.beginTransmission(address);
-  Wire.write(reg);
-  last_status = Wire.endTransmission();
+  ds28e17.write(address, reg, 1);
 
-  Wire.requestFrom(address, (uint8_t)4);
-  value  = (uint32_t)Wire.read() << 24; // value highest byte
-  value |= (uint32_t)Wire.read() << 16;
-  value |= (uint16_t)Wire.read() <<  8;
-  value |=           Wire.read();       // value lowest byte
+  last_status = ds28e17.read(address, arr, 4)
+  value  = (uint32_t)arr[0] << 24; // value highest byte
+  value |= (uint32_t)arr[1] << 16;
+  value |= (uint16_t)arr[2] <<  8;
+  value |=           arr[3];       // value lowest byte
 
   return value;
 }
@@ -362,31 +357,24 @@ uint32_t VL53L0X::readReg32Bit(uint8_t reg)
 // starting at the given register
 void VL53L0X::writeMulti(uint8_t reg, uint8_t const * src, uint8_t count)
 {
-  Wire.beginTransmission(address);
-  Wire.write(reg);
+  uint8_t dataLength = count + 1
+  uint8_t data[dataLength];
+  data[0] = reg;
 
-  while (count-- > 0)
-  {
-    Wire.write(*(src++));
+  for (int i=1; i<dataLength; i++) {
+    data[i] = *(src++);
   }
 
-  last_status = Wire.endTransmission();
+  last_status = ds28e17.write(address, data, dataLength)
 }
 
 // Read an arbitrary number of bytes from the sensor, starting at the given
 // register, into the given array
 void VL53L0X::readMulti(uint8_t reg, uint8_t * dst, uint8_t count)
 {
-  Wire.beginTransmission(address);
-  Wire.write(reg);
-  last_status = Wire.endTransmission();
+  ds28e17.write(address, reg, 1);
 
-  Wire.requestFrom(address, count);
-
-  while (count-- > 0)
-  {
-    *(dst++) = Wire.read();
-  }
+  last_status = ds28e17.read(address, dst, count)
 }
 
 // Set the return signal rate limit check value in units of MCPS (mega counts

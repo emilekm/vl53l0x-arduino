@@ -2,6 +2,8 @@
 #define VL53L0X_h
 
 #include <Arduino.h>
+#include <OneWire.h>
+#include "DS28E17.h"
 
 class VL53L0X
 {
@@ -96,7 +98,7 @@ class VL53L0X
 
     uint8_t last_status; // status of last I2C transmission
 
-    VL53L0X(void);
+    VL53L0X(DS28E17 *ds28e17_);
 
     void setAddress(uint8_t new_addr);
     inline uint8_t getAddress(void) { return address; }
@@ -132,6 +134,9 @@ class VL53L0X
     bool timeoutOccurred(void);
 
   private:
+    // DS28E17 (1-wire <-> I2C converter) object.
+    DS28E17 ds28e17;
+
     // TCC: Target CentreCheck
     // MSRC: Minimum Signal Rate Check
     // DSS: Dynamic Spad Selection
